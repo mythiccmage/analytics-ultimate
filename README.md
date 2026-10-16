@@ -3,6 +3,10 @@
 Simple, private website statistics that install on ordinary cPanel hosting in a few minutes.
 No database to create, no command line, no cookies, no IP addresses stored.
 
+**[Download and step-by-step instructions with screenshots](https://labs.ultisoft.online/analytics-ultimate/)**
+
+![Analytics Ultimate dashboard](https://raw.githubusercontent.com/mythiccmage/analytics-ultimate/master/docs/screenshots/overview.png)
+
 - Pageviews, unique visitors, new vs. returning, traffic sources, top pages
 - **File downloads**: automatic for common file types, plus tracked links that count on the server
 - Many sites, subdomains and even different domains in one install
