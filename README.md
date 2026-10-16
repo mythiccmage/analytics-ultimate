@@ -53,7 +53,7 @@ look at one site at a time.
 
 ## Projects
 
-On Settings → Projects, one line per project: `Name | sites | page starts with | download names start with`.
+On the Projects tab, below the numbers, one line per project: `Name | sites | page starts with | download names start with`.
 For example:
 
 ```

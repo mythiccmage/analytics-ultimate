@@ -4,7 +4,7 @@
 if (!defined('AUC_ROOT')) {
     define('AUC_ROOT', dirname(__DIR__));
 }
-define('AUC_VERSION', '1.0.0');
+define('AUC_VERSION', '1.0.1');
 define('AUC_SCHEMA', 1);
 
 function auc_h($s): string

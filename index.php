@@ -192,6 +192,27 @@ function auc_table(array $rows, array $cols, string $empty = 'Nothing yet.'): vo
     echo '</table></div>';
 }
 
+function auc_tracking_panel(): void
+{
+    $snippet = '<script defer src="' . auc_base_url() . 'a.js"></script>';
+    echo '<div class="panel"><h2>Tracking line</h2><p>Paste this just before <code>&lt;/head&gt;</code> on every page of every site you want counted, including subdomains and other domains.</p>'
+        . '<pre>' . auc_h($snippet) . '</pre>'
+        . '<p class="muted">Counted automatically: pageviews (including single-page apps), traffic sources, and file downloads. '
+        . 'Optional: <code>data-ua-event="name"</code> on any button, or <code>AnalyticsUltimate.track("name")</code> in your own script.</p>'
+        . '<p><a class="btn secondary" href="ignore.php">Exclude this browser from my stats</a></p>'
+        . '<p class="muted">For a site on a different domain, open any of its pages with <code>?ua-ignore=1</code> added to the address.</p></div>';
+}
+
+function auc_projects_editor(array $cfg): void
+{
+    echo '<div class="panel"><h2>Edit projects</h2><p>Group pages and downloads into products or sections. One per line:</p>'
+        . '<pre>Name | sites | page starts with | download names start with</pre>'
+        . '<p class="muted">Leave a part empty to skip it. Example: <code>Shop | | /shop, /cart | shop-</code> or <code>Blog | blog.example.com | |</code></p>'
+        . '<form method="post">' . auc_csrf_field() . '<input type="hidden" name="tab" value="projects"><input type="hidden" name="action" value="save_groups">'
+        . '<textarea name="groups" rows="5">' . auc_h(auc_groups_to_text($cfg['groups'] ?? [])) . '</textarea>'
+        . '<p style="margin-top:14px"><button type="submit">Save projects</button></p></form></div>';
+}
+
 /* -------------------------------------------------------------------- page */
 auc_head('Dashboard');
 echo '<header class="top"><div class="brand">Analytics Ultimate<small>' . auc_h(implode(', ', array_slice($cfg['sites'], 0, 3))) . '</small></div><nav class="tabs">';
@@ -269,8 +290,9 @@ if ($tab === 'overview') {
         auc_table($ev, [['Event', 'name'], ['Count', 'n', 1], ['People', 'u', 1]]);
         echo '</div>';
     }
+    auc_tracking_panel();
     if ($t['views'] === 0 && !$sitesSeen) {
-        echo '<div class="msg">No data yet. Add the tracking line from <a href="' . auc_h(auc_url(['tab' => 'settings'])) . '">Settings</a> to your website, then visit it.</div>';
+        echo '<div class="msg">No data yet. Add the tracking line below to your website, then visit it.</div>';
     }
 }
 
@@ -278,7 +300,7 @@ if ($tab === 'projects') {
     $groups = $cfg['groups'] ?? [];
     if (!$groups) {
         echo '<div class="panel"><h2>Projects</h2><p>Projects let you group pages and downloads into products or sections and compare them side by side, '
-            . 'for example "Shop" = everything under <code>/shop</code>.</p><p>Add some in <a href="' . auc_h(auc_url(['tab' => 'settings'])) . '">Settings</a>.</p></div>';
+            . 'for example "Shop" = everything under <code>/shop</code>. Add your first one below.</p></div>';
     } else {
         $rows = [];
         foreach ($groups as $g) {
@@ -318,6 +340,8 @@ if ($tab === 'projects') {
         }
         echo '</table></div></div>';
     }
+
+    auc_projects_editor($cfg);
 }
 
 if ($tab === 'downloads') {
@@ -326,6 +350,11 @@ if ($tab === 'downloads') {
     foreach (auc_top($f, 'download', 'label', 500) as $r) {
         $counts[$r['name']] = $r;
     }
+    echo '<div class="panel"><h2>All downloads in this range</h2>';
+    auc_table(auc_top($f, 'download', 'label', 100), [['File or link', 'name'], ['Clicks', 'n', 1], ['People', 'u', 1]], 'No downloads recorded yet.');
+    echo '<p class="muted" style="margin-top:12px">Links to common file types (zip, exe, dmg, pdf and more) on your pages are counted automatically when clicked. '
+        . 'Tracked links (below) are the most reliable.</p></div>';
+
     echo '<div class="panel"><h2>Tracked download links</h2><p>Use these links on your website instead of linking to the file directly. '
         . 'The click is counted on the server, so it also catches "save link as", download managers and shared links, then visitors are sent straight to the file. '
         . 'They are also how you can move a file to another host (such as GitHub) without changing any page.</p>';
@@ -348,21 +377,10 @@ if ($tab === 'downloads') {
         . '<div style="flex:2;min-width:240px"><label>File address</label><input type="text" name="target" placeholder="https://example.com/files/my-app-setup.exe" required></div></div>'
         . '<label>Description (optional)</label><input type="text" name="label" placeholder="My App for Windows">'
         . '<p style="margin-top:14px"><button type="submit">Add link</button></p></form></div>';
-
-    echo '<div class="panel"><h2>All downloads in this range</h2>';
-    auc_table(auc_top($f, 'download', 'label', 100), [['File or link', 'name'], ['Clicks', 'n', 1], ['People', 'u', 1]], 'No downloads recorded yet.');
-    echo '<p class="muted" style="margin-top:12px">Links to common file types (zip, exe, dmg, pdf and more) on your pages are counted automatically when clicked. '
-        . 'Tracked links above are the most reliable.</p></div>';
 }
 
 if ($tab === 'settings') {
-    $snippet = '<script defer src="' . auc_base_url() . 'a.js"></script>';
-    echo '<div class="panel"><h2>Tracking line</h2><p>Paste this just before <code>&lt;/head&gt;</code> on every page of every site you want counted, including subdomains and other domains.</p>'
-        . '<pre>' . auc_h($snippet) . '</pre>'
-        . '<p class="muted">Counted automatically: pageviews (including single-page apps), traffic sources, and file downloads. '
-        . 'Optional: <code>data-ua-event="name"</code> on any button, or <code>AnalyticsUltimate.track("name")</code> in your own script.</p>'
-        . '<p><a class="btn secondary" href="ignore.php">Exclude this browser from my stats</a></p>'
-        . '<p class="muted">For a site on a different domain, open any of its pages with <code>?ua-ignore=1</code> added to the address.</p></div>';
+    auc_tracking_panel();
 
     echo '<div class="panel"><h2>Sites and preferences</h2><form method="post">' . auc_csrf_field() . '<input type="hidden" name="tab" value="settings"><input type="hidden" name="action" value="save_settings">'
         . '<label>Websites to track (one per line)</label><textarea name="sites" rows="4">' . auc_h(implode("\n", $cfg['sites'])) . '</textarea>'
@@ -374,13 +392,6 @@ if ($tab === 'settings') {
     echo '</select><div class="muted">Applies to new data. Records already stored keep the day they were saved on.</div>'
         . '<label>Delete data older than (months, 0 = keep forever)</label><input type="number" name="retention" min="0" max="120" value="' . (int) $cfg['retention_months'] . '">'
         . '<p style="margin-top:14px"><button type="submit">Save</button></p></form></div>';
-
-    echo '<div class="panel"><h2>Projects</h2><p>Group pages and downloads into products or sections. One per line:</p>'
-        . '<pre>Name | sites | page starts with | download names start with</pre>'
-        . '<p class="muted">Leave a part empty to skip it. Example: <code>Shop | | /shop, /cart | shop-</code> or <code>Blog | blog.example.com | |</code></p>'
-        . '<form method="post">' . auc_csrf_field() . '<input type="hidden" name="tab" value="settings"><input type="hidden" name="action" value="save_groups">'
-        . '<textarea name="groups" rows="5">' . auc_h(auc_groups_to_text($cfg['groups'] ?? [])) . '</textarea>'
-        . '<p style="margin-top:14px"><button type="submit">Save projects</button></p></form></div>';
 
     echo '<div class="panel"><h2>Password</h2><form method="post">' . auc_csrf_field() . '<input type="hidden" name="tab" value="settings"><input type="hidden" name="action" value="change_password">'
         . '<label>Current password</label><input type="password" name="current" autocomplete="current-password">'

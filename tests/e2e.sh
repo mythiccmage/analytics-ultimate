@@ -78,10 +78,14 @@ CSRF=$(curl -s -b "$JAR" "$BASE/index.php?tab=settings" | grep -o 'name="csrf" v
 
 echo "Admin actions"
 check "POST without CSRF token is refused" 'curl -s -c "$JAR" -b "$JAR" -L -d "tab=settings&action=save_groups&groups=Hack||/|" "$BASE/index.php" | grep -q "session expired"'
-curl -s -c "$JAR" -b "$JAR" -o /dev/null -d "csrf=$CSRF&tab=settings&action=save_groups" --data-urlencode "groups=Shop | | /shop | shop-
+curl -s -c "$JAR" -b "$JAR" -o /dev/null -d "csrf=$CSRF&tab=projects&action=save_groups" --data-urlencode "groups=Shop | | /shop | shop-
 Main site | example.com | / |" "$BASE/index.php"
 check "projects tab shows groups" 'curl -s -c "$JAR" -b "$JAR" "$BASE/index.php?tab=projects" | grep -q "Shop" && ! curl -s -b "$JAR" "$BASE/index.php?tab=projects" | grep -qiE "warning|fatal|notice"'
 curl -s -c "$JAR" -b "$JAR" -o /dev/null -d "csrf=$CSRF&tab=downloads&action=add_download&key=my-app&label=My%20App&target=https%3A%2F%2Fexample.com%2Ffiles%2Fmy%20app.exe" "$BASE/index.php"
+check "projects: numbers first, editor underneath" 'P=$(curl -s -b "$JAR" "$BASE/index.php?tab=projects"); a=$(echo "$P" | grep -b -o "By month" | head -1 | cut -d: -f1); b=$(echo "$P" | grep -b -o "Edit projects" | head -1 | cut -d: -f1); [ -n "$a" ] && [ -n "$b" ] && [ "$a" -lt "$b" ]'
+check "downloads: stats first, tracked-link manager underneath" 'P=$(curl -s -b "$JAR" "$BASE/index.php?tab=downloads"); a=$(echo "$P" | grep -b -o "All downloads in this range" | head -1 | cut -d: -f1); b=$(echo "$P" | grep -b -o "Add a tracked link" | head -1 | cut -d: -f1); [ -n "$a" ] && [ -n "$b" ] && [ "$a" -lt "$b" ]'
+check "overview: stats first, tracking line underneath" 'P=$(curl -s -b "$JAR" "$BASE/index.php?tab=overview"); a=$(echo "$P" | grep -b -o "Pageviews by day" | head -1 | cut -d: -f1); b=$(echo "$P" | grep -b -o "Tracking line" | head -1 | cut -d: -f1); [ -n "$a" ] && [ -n "$b" ] && [ "$a" -lt "$b" ]'
+check "settings has no projects editor" '! curl -s -b "$JAR" "$BASE/index.php?tab=settings" | grep -q "Edit projects"'
 check "tracked download link saved" 'curl -s -b "$JAR" "$BASE/index.php?tab=downloads" | grep -q "go.php?l=my-app"'
 check "open-redirect style target refused" 'curl -s -c "$JAR" -b "$JAR" -L -d "csrf=$CSRF&tab=downloads&action=add_download&key=bad&target=javascript:alert(1)" "$BASE/index.php" | grep -q "must start with"'
 check "go.php redirects to the file" '[ "$(curl -s -o /dev/null -w "%{redirect_url}" -A "$UA" -e https://example.com/downloads "$BASE/go.php?l=my-app")" = "https://example.com/files/my app.exe" ]'
