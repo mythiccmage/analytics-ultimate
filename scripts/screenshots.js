@@ -20,7 +20,7 @@ const sh = (c) => execSync(c, { stdio: 'pipe' }).toString();
   // Show a demo domain instead of the local test address.
   const demoUrls = () => page.evaluate((from) => {
     const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-    for (let n; (n = w.nextNode()); ) n.nodeValue = n.nodeValue.split(from).join('https://stats.example.com');
+    for (let n; (n = w.nextNode()); ) n.nodeValue = n.nodeValue.split(from).join('https://stats.example.com').split('172.17.0.1').join('203.0.113.7');
   }, `http://127.0.0.1:${PORT}`);
   const shot = async (name, opts = {}) => { await demoUrls(); await page.screenshot({ path: path.join(out, name + '.png'), ...opts }); console.log('saved', name); };
 

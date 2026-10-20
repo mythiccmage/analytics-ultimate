@@ -96,7 +96,7 @@ try {
             exit;
         }
     }
-    auc_record($type, $host, $path, $ref, $uid, $label);
+    auc_record($type, $host, $path, $ref, $uid, $label, $type === 'download' ? 'page' : '');
 } catch (Throwable $e) {
     error_log('analytics-ultimate collect: ' . $e->getMessage());
 }

@@ -74,5 +74,5 @@ function auc_head(string $title, bool $narrow = false): void
 
 function auc_foot(): void
 {
-    echo '<p class="muted" style="margin-top:34px">Analytics Ultimate ' . auc_h(AUC_VERSION) . ' · free and open source · no cookies, no IP addresses stored</p></div></body></html>';
+    echo '<p class="muted" style="margin-top:34px"><a href="https://labs.ultisoft.online/analytics-ultimate/" target="_blank" rel="noopener">Analytics Ultimate</a> ' . auc_h(AUC_VERSION) . ' · free and open source · by <a href="https://ultisoft.online/" target="_blank" rel="noopener">Ultisoft</a> · no cookies, no IP addresses stored</p></div></body></html>';
 }

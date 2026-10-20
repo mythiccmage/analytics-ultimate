@@ -38,7 +38,7 @@ function uid(): string { return substr(md5((string) mt_rand()), 0, 20); }
 
 $pdo = auc_db();
 $pdo->beginTransaction();
-$ins = $pdo->prepare('INSERT INTO events (ts, day, kind, host, path, ref, uid, label) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+$ins = $pdo->prepare('INSERT INTO events (ts, day, kind, host, path, ref, uid, label, via) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
 $pool = [];
 $days = 75;
 $tz = auc_tz();
@@ -58,12 +58,12 @@ for ($i = $days; $i >= 0; $i--) {
         $t = (clone $d)->setTime(mt_rand(7, 22), mt_rand(0, 59), mt_rand(0, 59))->getTimestamp();
         for ($k = 0; $k < $n; $k++) {
             $path = pick($pages[$host]);
-            $ins->execute([$t + $k * 40, auc_day($t), 'pageview', $host, $path, $k === 0 ? $ref : '', $u, '']);
+            $ins->execute([$t + $k * 40, auc_day($t), 'pageview', $host, $path, $k === 0 ? $ref : '', $u, '', '']);
             if ($host === 'example.com' && $path === '/editor/download' && mt_rand(1, 100) <= 55) {
-                $ins->execute([$t + $k * 40 + 20, auc_day($t), 'download', $host, $path, '', $u, pick($dls)]);
+                $ins->execute([$t + $k * 40 + 20, auc_day($t), 'download', $host, $path, '', $u, pick($dls), mt_rand(1, 100) <= 86 ? 'page' : 'direct']);
             }
             if ($host === 'example.com' && $path === '/pricing' && mt_rand(1, 100) <= 18) {
-                $ins->execute([$t + $k * 40 + 25, auc_day($t), 'event', $host, $path, '', $u, 'start-trial']);
+                $ins->execute([$t + $k * 40 + 25, auc_day($t), 'event', $host, $path, '', $u, 'start-trial', '']);
             }
         }
     }

@@ -25,14 +25,17 @@ if ($method === 'GET' && !auc_is_ignored_request() && !auc_is_bot($ua)) {
         $refHost = auc_norm_host((string) parse_url((string) $_SERVER['HTTP_REFERER'], PHP_URL_HOST));
         $refPath = (string) (parse_url((string) $_SERVER['HTTP_REFERER'], PHP_URL_PATH) ?: '/');
     }
-    if ($refHost === '' || !auc_host_allowed($refHost, $cfg['sites'])) {
+    // A real click on a download button carries one of your sites as the Referer; scanners, bots and
+    // shared links usually don't. Recorded so the dashboard can show the two apart.
+    $via = ($refHost !== '' && auc_host_allowed($refHost, $cfg['sites'])) ? 'page' : 'direct';
+    if ($via === 'direct') {
         $refHost = auc_norm_host((string) ($cfg['sites'][0] ?? ($_SERVER['HTTP_HOST'] ?? 'unknown')));
         $refHost = ltrim($refHost, '*.');
         $refPath = '/';
     }
     $uid = substr(hash('sha256', ($cfg['salt'] ?? '') . ($_SERVER['REMOTE_ADDR'] ?? '') . $ua), 0, 32);
     try {
-        auc_record('download', $refHost, substr($refPath, 0, 300), '', $uid, substr($key, 0, 200));
+        auc_record('download', $refHost, substr($refPath, 0, 300), '', $uid, substr($key, 0, 200), $via);
     } catch (Throwable $e) {
         error_log('analytics-ultimate go: ' . $e->getMessage());
     }

@@ -4,8 +4,8 @@
 if (!defined('AUC_ROOT')) {
     define('AUC_ROOT', dirname(__DIR__));
 }
-define('AUC_VERSION', '1.0.1');
-define('AUC_SCHEMA', 1);
+define('AUC_VERSION', '1.1.0');
+define('AUC_SCHEMA', 2);
 
 function auc_h($s): string
 {
@@ -113,6 +113,7 @@ function auc_default_config(): array
         'groups' => [],
         'downloads' => [],
         'retention_months' => 0,
+        'ignore_ips' => [],
     ];
 }
 
@@ -156,6 +157,13 @@ function auc_migrate(PDO $pdo): void
         $pdo->exec('CREATE INDEX IF NOT EXISTS idx_events_host ON events (host, day)');
         $pdo->exec('CREATE INDEX IF NOT EXISTS idx_events_uid ON events (uid)');
         $pdo->exec('CREATE TABLE IF NOT EXISTS login_attempts (ip_hash TEXT NOT NULL, ts INTEGER NOT NULL)');
+    }
+    if ($have < 2) {
+        // 1.1.0: how a download click arrived ('page' = from a page on a tracked site, 'direct' = no page referred it).
+        $cols = $pdo->query('PRAGMA table_info(events)')->fetchAll(PDO::FETCH_COLUMN, 1);
+        if (!in_array('via', $cols, true)) {
+            $pdo->exec("ALTER TABLE events ADD COLUMN via TEXT NOT NULL DEFAULT ''");
+        }
     }
     if ($have < AUC_SCHEMA) {
         $st = $pdo->prepare("INSERT OR REPLACE INTO meta (k, v) VALUES ('schema', ?)");
@@ -220,10 +228,44 @@ function auc_is_bot(string $ua): bool
     return $ua === '' || (bool) preg_match('/bot|crawl|spider|slurp|facebookexternalhit|preview|headless|playwright|puppeteer|selenium|lighthouse|monitor|uptime|curl|wget|python-requests|httpclient/i', $ua);
 }
 
-/** Owner's own browsers (cookie from ignore.php) and scripted tests (X-Analytics-Ignore header) are never counted. */
+/** True if $ip is inside the IPv4 range $net written as "203.0.113.0/24" (or equals it, for a single address). */
+function auc_ip_in_cidr(string $ip, string $net): bool
+{
+    if (strpos($net, '/') === false) {
+        return strcasecmp($ip, $net) === 0;
+    }
+    list($base, $bits) = explode('/', $net, 2);
+    $ipL = ip2long($ip);
+    $baseL = ip2long($base);
+    $bits = (int) $bits;
+    if ($ipL === false || $baseL === false || $bits < 8 || $bits > 32) {
+        return false;
+    }
+    $mask = $bits === 32 ? 0xFFFFFFFF : ((~((1 << (32 - $bits)) - 1)) & 0xFFFFFFFF);
+    return (($ipL & $mask) === ($baseL & $mask));
+}
+
+/** The visitor's address is only compared with the list in Settings; it is never stored. */
+function auc_ip_ignored(): bool
+{
+    $cfg = auc_config();
+    $list = isset($cfg['ignore_ips']) && is_array($cfg['ignore_ips']) ? $cfg['ignore_ips'] : [];
+    $ip = (string) ($_SERVER['REMOTE_ADDR'] ?? '');
+    if ($ip === '' || !$list) {
+        return false;
+    }
+    foreach ($list as $entry) {
+        if (auc_ip_in_cidr($ip, (string) $entry)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/** Your own browsers (cookie from ignore.php), your own IP addresses (Settings) and scripted tests (X-Analytics-Ignore header) are never counted. */
 function auc_is_ignored_request(): bool
 {
-    return !empty($_COOKIE['auc_ignore']) || !empty($_SERVER['HTTP_X_ANALYTICS_IGNORE']);
+    return !empty($_COOKIE['auc_ignore']) || !empty($_SERVER['HTTP_X_ANALYTICS_IGNORE']) || auc_ip_ignored();
 }
 
 function auc_is_https(): bool
@@ -249,12 +291,12 @@ function auc_random(int $bytes = 16): string
 }
 
 /** Insert one event. Used by collect.php and go.php. */
-function auc_record(string $kind, string $host, string $path, string $ref, string $uid, string $label): void
+function auc_record(string $kind, string $host, string $path, string $ref, string $uid, string $label, string $via = ''): void
 {
     $now = time();
     $pdo = auc_db();
-    $st = $pdo->prepare('INSERT INTO events (ts, day, kind, host, path, ref, uid, label) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
-    $st->execute([$now, auc_day($now), $kind, $host, $path, $ref, $uid, $label]);
+    $st = $pdo->prepare('INSERT INTO events (ts, day, kind, host, path, ref, uid, label, via) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    $st->execute([$now, auc_day($now), $kind, $host, $path, $ref, $uid, $label, $via]);
 
     $cfg = auc_config();
     $months = (int) ($cfg['retention_months'] ?? 0);

@@ -11,7 +11,7 @@ No database to create, no command line, no cookies, no IP addresses stored.
 - **File downloads**: automatic for common file types, plus tracked links that count on the server
 - Many sites, subdomains and even different domains in one install
 - **Projects**: group pages and downloads into products or sections and compare them over months
-- Keeps your own visits out (exclude-my-browser, bots and headless browsers ignored)
+- Keeps your own visits out (exclude-my-browser, your own IP addresses, bots and headless browsers ignored)
 - One folder, plain PHP + SQLite, free and open source (MIT)
 
 ## Requirements
@@ -50,6 +50,8 @@ look at one site at a time.
   "save link as", download managers and shared links are counted too. You can also move the file to another host
   later without touching any page.
 - Mark any other link with `data-ua-download`.
+- The Downloads tab splits clicks into **from a page** (a real button click on one of your sites) and **direct / other**
+  (shared links, scanners and bots send no referring page), which makes automated clicks easy to spot.
 
 ## Projects
 
@@ -73,6 +75,9 @@ range and all time, plus a month-by-month table. Handy for deciding what is wort
 
 - `ignore.php` sets a cookie for that browser. For a site on a *different* domain than your stats site, add
   `?ua-ignore=1` to any page address of that site once; `?ua-ignore=0` turns counting back on.
+- Settings → **My IP addresses**: list the addresses (or IPv4 ranges such as `203.0.113.0/24`) to ignore. One click adds
+  your current address. Home connections change address now and then, so a range from your internet provider is more
+  reliable. Addresses are only compared with the list, never stored. Behind a proxy or CDN the address seen may be the proxy's.
 - Scripts and tests can send the header `X-Analytics-Ignore: 1`.
 - Bots, crawlers, uptime monitors and headless browsers are skipped automatically.
 - Settings → Clean up data deletes records for a date range (e.g. old test traffic).
@@ -106,4 +111,7 @@ Delete the `analytics-ultimate` folder and its data folder, and remove the scrip
   `data` folder inside it.
 - *Blank dashboard after upgrading PHP*: make sure the new PHP version still has `pdo_sqlite` enabled.
 
-MIT licensed. Made by Ultisoft.
+Analytics Ultimate is free. If you'd like to credit it, Settings has an optional "Show your support" snippet,
+a small link you can paste into your own site. Nothing is ever added to your pages automatically.
+
+MIT licensed. Made by [Ultisoft](https://ultisoft.online/).

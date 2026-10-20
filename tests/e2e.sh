@@ -94,6 +94,33 @@ check "go.php click was counted on the server" '[ "$(dbq "select count(*) from e
 curl -s -o /dev/null -A "$UA" -H "X-Analytics-Ignore: 1" "$BASE/go.php?l=my-app"
 curl -s -o /dev/null -A "Googlebot" "$BASE/go.php?l=my-app"
 check "go.php skips ignored and bot clicks" '[ "$(dbq "select count(*) from events where label=\"my-app\"")" = 1 ]'
+echo "Download source and ignored IPs (1.1)"
+check "go.php records a click from a site page as via=page" '[ "$(dbq "select via from events where kind=\"download\" and label=\"my-app\" and host=\"example.com\" order by id limit 1")" = "page" ]'
+curl -s -o /dev/null -A "$UA" "$BASE/go.php?l=my-app"
+check "go.php records a click with no referring page as via=direct" '[ "$(dbq "select via from events where label=\"my-app\" order by id desc limit 1")" = "direct" ]'
+check "downloads table shows the split columns" 'curl -s -b "$JAR" "$BASE/index.php?tab=downloads" | grep -q "From a page" && curl -s -b "$JAR" "$BASE/index.php?tab=downloads" | grep -q "Direct / other"'
+GW=$(docker network inspect bridge --format '{{(index .IPAM.Config 0).Gateway}}')
+check "settings shows the visitor's current address" 'curl -s -b "$JAR" "$BASE/index.php?tab=settings" | grep -q "Your current address"'
+check "invalid IP entries are rejected" 'curl -s -c "$JAR" -b "$JAR" -L -d "csrf=$CSRF&tab=settings&action=save_ips&ips=not-an-ip" "$BASE/index.php?tab=settings" | grep -q "Not a valid address"'
+n0=$(dbq "select count(*) from events")
+curl -s -c "$JAR" -b "$JAR" -o /dev/null -d "csrf=$CSRF&tab=settings&action=add_my_ip" "$BASE/index.php"
+check "Ignore this address saves it" 'curl -s -b "$JAR" "$BASE/index.php?tab=settings" | grep -q "already ignored"'
+post_collect https://example.com '{"t":"pageview","h":"example.com","p":"/from-ignored-ip","u":"visitor0000000009"}' >/dev/null
+curl -s -o /dev/null -A "$UA" -e https://example.com/downloads "$BASE/go.php?l=my-app"
+check "an ignored address is not counted (pageview and download)" '[ "$(dbq "select count(*) from events")" = "$n0" ]'
+curl -s -c "$JAR" -b "$JAR" -o /dev/null -d "csrf=$CSRF&tab=settings&action=save_ips" --data-urlencode "ips=198.51.100.0/24" "$BASE/index.php"
+post_collect https://example.com '{"t":"pageview","h":"example.com","p":"/other-range","u":"visitor0000000009"}' >/dev/null
+check "a range that does not include the visitor is counted" '[ "$(dbq "select count(*) from events where path=\"/other-range\"")" = 1 ]'
+RANGE=$(echo "$GW" | awk -F. '{print $1"."$2"."$3".0/24"}')
+curl -s -c "$JAR" -b "$JAR" -o /dev/null -d "csrf=$CSRF&tab=settings&action=save_ips" --data-urlencode "ips=$RANGE" "$BASE/index.php"
+post_collect https://example.com '{"t":"pageview","h":"example.com","p":"/in-range","u":"visitor0000000009"}' >/dev/null
+check "a /24 range that includes the visitor is ignored" '[ "$(dbq "select count(*) from events where path=\"/in-range\"")" = 0 ]'
+curl -s -c "$JAR" -b "$JAR" -o /dev/null -d "csrf=$CSRF&tab=settings&action=save_ips" --data-urlencode "ips=" "$BASE/index.php"
+post_collect https://example.com '{"t":"pageview","h":"example.com","p":"/after-clear","u":"visitor0000000009"}' >/dev/null
+check "clearing the list counts visitors again" '[ "$(dbq "select count(*) from events where path=\"/after-clear\"")" = 1 ]'
+check "database upgrade from 1.0.x keeps data and adds the new column" '[ "$(docker exec "$NAME" php /srv/home/public_html/analytics-ultimate/tests/migrate-test.php)" = OK ]'
+check "footer links back to Ultisoft Labs" 'curl -s -b "$JAR" "$BASE/index.php" | grep -q "labs.ultisoft.online/analytics-ultimate"'
+check "settings offers an optional support badge" 'curl -s -b "$JAR" "$BASE/index.php?tab=settings" | grep -q "Show your support"'
 check "CSV export works and escapes spreadsheet formulas" 'curl -s -b "$JAR" "$BASE/index.php?export=1" | head -1 | grep -q "time,day,type"'
 check "settings page renders" 'curl -s -b "$JAR" "$BASE/index.php?tab=settings" | grep -q "Tracking line" && ! curl -s -b "$JAR" "$BASE/index.php?tab=settings" | grep -qiE "warning|fatal|notice"'
 curl -s -c "$JAR" -b "$JAR" -o /dev/null -d "csrf=$CSRF&tab=settings&action=delete_test_data&from=2000-01-01&to=2100-01-01" "$BASE/index.php"

@@ -104,6 +104,25 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
                 $new['password_hash'] = password_hash($pw, PASSWORD_DEFAULT);
                 auc_save_config($new) ? auc_flash('Password changed.') : auc_flash('Could not write settings.', false);
             }
+        } elseif ($act === 'save_ips' || $act === 'add_my_ip') {
+            $current = (string) ($_SERVER['REMOTE_ADDR'] ?? '');
+            $entries = isset($cfg['ignore_ips']) && is_array($cfg['ignore_ips']) ? $cfg['ignore_ips'] : [];
+            if ($act === 'add_my_ip') {
+                if ($current !== '' && !in_array($current, $entries, true)) {
+                    $entries[] = $current;
+                }
+                $bad = [];
+            } else {
+                list($entries, $bad) = auc_parse_ip_list((string) ($_POST['ips'] ?? ''));
+            }
+            if ($bad) {
+                auc_flash('Not a valid address or range: ' . implode(', ', array_slice($bad, 0, 3)) . '. Use 203.0.113.7 or 203.0.113.0/24.', false);
+            } elseif (count($entries) > 50) {
+                auc_flash('Keep the list to 50 entries or fewer.', false);
+            } else {
+                $new['ignore_ips'] = array_values($entries);
+                auc_save_config($new) ? auc_flash($act === 'add_my_ip' ? 'Added ' . $current . '. Visits from it are no longer counted.' : 'IP list saved.') : auc_flash('Could not write settings.', false);
+            }
         } elseif ($act === 'prune') {
             $months = max(1, (int) ($_POST['months'] ?? 24));
             $st = auc_db()->prepare('DELETE FROM events WHERE day < ?');
@@ -190,6 +209,40 @@ function auc_table(array $rows, array $cols, string $empty = 'Nothing yet.'): vo
         echo '</tr>';
     }
     echo '</table></div>';
+}
+
+/** Splits a pasted list into valid entries (IPv4/IPv6 addresses and IPv4 ranges like 203.0.113.0/24) and rejects the rest. */
+function auc_parse_ip_list(string $text): array
+{
+    $ok = [];
+    $bad = [];
+    foreach (preg_split('/[\s,;]+/', trim($text)) as $e) {
+        $e = trim((string) $e);
+        if ($e === '') {
+            continue;
+        }
+        if (strpos($e, '/') !== false) {
+            list($ip, $bits) = explode('/', $e, 2);
+            $valid = filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) && ctype_digit($bits) && (int) $bits >= 8 && (int) $bits <= 32;
+        } else {
+            $valid = (bool) filter_var($e, FILTER_VALIDATE_IP);
+        }
+        if ($valid) {
+            $ok[$e] = true;
+        } else {
+            $bad[] = $e;
+        }
+    }
+    return [array_keys($ok), $bad];
+}
+
+function auc_downloads_table(array $rows): void
+{
+    auc_table($rows, [['File or link', 'name'], ['Clicks', 'n', 1], ['From a page', 'from_page', 1], ['Direct / other', 'direct', 1], ['People', 'u', 1]], 'No downloads recorded yet.');
+    if ($rows) {
+        echo '<p class="muted" style="margin-top:12px">"From a page" = the click came from a page on one of your sites, like a real button click. '
+            . '"Direct / other" = nothing referred it: shared links, scanners and bots. Clicks counted before version 1.1 are not split.</p>';
+    }
 }
 
 function auc_tracking_panel(): void
@@ -282,7 +335,7 @@ if ($tab === 'overview') {
     echo '</div><div class="panel"><h2>Where visitors come from</h2>';
     auc_table(auc_top($f, 'pageview', 'ref'), [['Source', 'name'], ['Views', 'n', 1], ['Visitors', 'u', 1]]);
     echo '</div><div class="panel"><h2>Downloads</h2>';
-    auc_table(auc_top($f, 'download', 'label'), [['File', 'name'], ['Clicks', 'n', 1], ['People', 'u', 1]], 'No downloads recorded yet.');
+    auc_downloads_table(auc_top_downloads($f, 15));
     echo '</div>';
     $ev = auc_top($f, 'event', 'label');
     if ($ev) {
@@ -351,7 +404,7 @@ if ($tab === 'downloads') {
         $counts[$r['name']] = $r;
     }
     echo '<div class="panel"><h2>All downloads in this range</h2>';
-    auc_table(auc_top($f, 'download', 'label', 100), [['File or link', 'name'], ['Clicks', 'n', 1], ['People', 'u', 1]], 'No downloads recorded yet.');
+    auc_downloads_table(auc_top_downloads($f, 100));
     echo '<p class="muted" style="margin-top:12px">Links to common file types (zip, exe, dmg, pdf and more) on your pages are counted automatically when clicked. '
         . 'Tracked links (below) are the most reliable.</p></div>';
 
@@ -382,6 +435,22 @@ if ($tab === 'downloads') {
 if ($tab === 'settings') {
     auc_tracking_panel();
 
+    $myIp = (string) ($_SERVER['REMOTE_ADDR'] ?? '');
+    $ignored = isset($cfg['ignore_ips']) && is_array($cfg['ignore_ips']) ? $cfg['ignore_ips'] : [];
+    echo '<div class="panel"><h2>My IP addresses</h2><p>Visits and downloads from these addresses are not counted, so your own devices stay out of your stats even without the exclude cookie. '
+        . 'Addresses are only compared with this list and are never stored.</p>'
+        . '<p>Your current address: <code>' . auc_h($myIp) . '</code>';
+    if ($myIp !== '' && !in_array($myIp, $ignored, true)) {
+        echo ' <form method="post" style="display:inline">' . auc_csrf_field() . '<input type="hidden" name="tab" value="settings"><input type="hidden" name="action" value="add_my_ip"><button class="secondary" type="submit">Ignore this address</button></form>';
+    } elseif ($myIp !== '') {
+        echo ' <span class="muted">(already ignored)</span>';
+    }
+    echo '</p><form method="post">' . auc_csrf_field() . '<input type="hidden" name="tab" value="settings"><input type="hidden" name="action" value="save_ips">'
+        . '<label>Addresses to ignore (one per line)</label><textarea name="ips" rows="3" placeholder="203.0.113.7&#10;203.0.113.0/24">' . auc_h(implode("\n", $ignored)) . '</textarea>'
+        . '<div class="muted">Single addresses, or IPv4 ranges like <code>203.0.113.0/24</code> (a /24 covers 256 addresses next to each other). Home connections often change address, so a range from your internet provider is more reliable than one address. '
+        . 'Behind a proxy or CDN the address seen may be the proxy\'s.</div>'
+        . '<p style="margin-top:14px"><button type="submit">Save</button></p></form></div>';
+
     echo '<div class="panel"><h2>Sites and preferences</h2><form method="post">' . auc_csrf_field() . '<input type="hidden" name="tab" value="settings"><input type="hidden" name="action" value="save_settings">'
         . '<label>Websites to track (one per line)</label><textarea name="sites" rows="4">' . auc_h(implode("\n", $cfg['sites'])) . '</textarea>'
         . '<div class="muted">Only these sites can send data. <code>*.example.com</code> covers all subdomains.</div>'
@@ -398,6 +467,9 @@ if ($tab === 'settings') {
         . '<label>New password</label><input type="password" name="password" autocomplete="new-password">'
         . '<label>Repeat new password</label><input type="password" name="password2" autocomplete="new-password">'
         . '<p style="margin-top:14px"><button type="submit">Change password</button></p></form></div>';
+
+    echo '<div class="panel"><h2>Show your support</h2><p>Analytics Ultimate is free and open source. If you like it, you can credit it on your own site with a small link. Totally optional, and nothing is added to your pages unless you paste this yourself:</p>'
+        . '<pre>' . auc_h('<a href="https://labs.ultisoft.online/analytics-ultimate/">Stats by Analytics Ultimate</a>') . '</pre></div>';
 
     echo '<div class="panel"><h2>Clean up data</h2>'
         . '<form method="post" class="row" onsubmit="return confirm(\'Delete these records permanently?\')">' . auc_csrf_field() . '<input type="hidden" name="tab" value="settings"><input type="hidden" name="action" value="delete_test_data">'

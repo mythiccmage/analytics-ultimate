@@ -169,6 +169,16 @@ function auc_top(array $f, string $kind, string $col, int $limit = 15, bool $ski
         WHERE kind = ? AND $w$empty GROUP BY name ORDER BY n DESC LIMIT " . (int) $limit, $p);
 }
 
+/** Downloads by file or tracked link, split by how the click arrived (from a page vs direct). */
+function auc_top_downloads(array $f, int $limit = 15): array
+{
+    $p = [];
+    $w = auc_where($f, $p);
+    return auc_all("SELECT label AS name, COUNT(*) AS n, COUNT(DISTINCT uid) AS u,
+        SUM(via = 'page') AS from_page, SUM(via = 'direct') AS direct
+        FROM events WHERE kind = 'download' AND $w GROUP BY label ORDER BY n DESC LIMIT " . (int) $limit, $p);
+}
+
 function auc_sites_seen(): array
 {
     $rows = auc_all('SELECT DISTINCT host FROM events ORDER BY host');
